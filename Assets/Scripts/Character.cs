@@ -74,7 +74,7 @@ public class Character : MonoBehaviour
             chamber[loadBulletPosition] = true;
         }
 
-        Debug.Log($"player : {string.Join(", ", chamber)}");
+        Debug.Log($"{gameObject.name} : {string.Join(", ", chamber)}");
 
     }
 
@@ -85,10 +85,6 @@ public class Character : MonoBehaviour
             State = CharacterState.Fire;
             IsBulletExist = chamber[0];
             chamber.RemoveAt(0);
-            if (IsBulletExist && State != CharacterState.Dodge)
-            {
-                target.TakeDamage();
-            }
         }
         else
         {
@@ -116,7 +112,7 @@ public class Character : MonoBehaviour
 
     public virtual void TakeDamage()
     {
-        Debug.Log($"Health:{Health}");
         Health--;
+        Debug.Log($"gameObject:{gameObject.name} Health:{Health}");
     }
 }
