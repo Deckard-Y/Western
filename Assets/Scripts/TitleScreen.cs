@@ -18,6 +18,6 @@ public class TitleScreen : MonoBehaviour
     }
    Å@public void ChangeScene()
     {
-        SceneManager.LoadScene("MainScene");
+        SceneManager.LoadScene("CharacterSelect");
     }
 }

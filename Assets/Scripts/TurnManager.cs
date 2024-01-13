@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.UIElements;
@@ -9,9 +10,29 @@ public class TurnManager : MonoBehaviour
 {
     [SerializeField] private UnityEngine.UI.Image uiFill;
     [SerializeField] private TextMeshProUGUI uiTimerText;
+    [SerializeField] private TextMeshProUGUI uiStatusText;
+    [SerializeField] private TextMeshProUGUI uiSelectedCardText;
+    [SerializeField] private TextMeshProUGUI uiEnemySelectedCardText;
     [SerializeField] private float CountTime;
     [SerializeField] private float timer;
-    [SerializeField] private TextMeshProUGUI uiStatusText;
+    [SerializeField] private string SelectedCard;
+    [SerializeField] private string EnemyCard;
+
+    [SerializeField] private GameObject fireButton;
+    [SerializeField] private GameObject dodgeButton;
+    [SerializeField] private GameObject changeButton;
+    [SerializeField] private GameObject skillButton;
+
+    [SerializeField] private Transform cardsParent; // ボタンを配置するパネルのTransform
+    [SerializeField] private List<UnityEngine.UI.Button> cardButtons;
+    private List<GameObject> cardButtonsArray = new List<GameObject>();
+
+    public Phase currentPhase;
+    public enum Phase { Selection, Action, Processing }
+
+    private bool hasPlayerExecuted = false;
+    private bool hasEnemyExecuted = false;
+    private bool isJudge = false;
 
     private List<string> timeOverMessages = new List<string>
     {
@@ -28,31 +49,46 @@ public class TurnManager : MonoBehaviour
         "Let's Rock!"
     };
 
-    public enum Phase { Selection, Action, Processing }
-    public Phase currentPhase;
-
-    [SerializeField] private GameObject cardButtonPrefab; // カードボタンのプレハブ
-    [SerializeField] private Transform cardsParent; // ボタンを配置するパネルのTransform
-    [SerializeField] private List<UnityEngine.UI.Button> cardButtons;
-    int initialHandSize = 5; // 初期手札の枚数
     private void Start()
     {
         SetPhase(Phase.Selection);
         timer = CountTime;
-
-        // 手札のカードに対応するボタンを生成
-        for (int i = 0; i < initialHandSize; i++)
-        {
-            CreateCardButton();
-        }
+        
+        CreateCardButton(fireButton);
+        CreateCardButton(dodgeButton);
+        CreateCardButton(changeButton);
+        CreateCardButton(skillButton);
     }
-    private void CreateCardButton()
+
+    private void OnEnable()
     {
-        GameObject buttonObj = Instantiate(cardButtonPrefab, cardsParent);
+        Card.OnCardSelected += HandleCardClick;
+    }
+
+    private void OnDisable()
+    {
+        Card.OnCardSelected -= HandleCardClick;
+    }
+
+    private void HandleCardClick(string cardInfo)
+    {
+        SelectedCard = cardInfo;
+    }
+    private void CreateCardButton(GameObject prefab)
+    {
+        GameObject buttonObj = Instantiate(prefab, cardsParent);
         UnityEngine.UI.Button button = buttonObj.GetComponent<UnityEngine.UI.Button>();
-        cardButtons.Add(button); // リストに追加
-                                 // ここでボタンの設定を行う
-                                 // 例: button.onClick.AddListener(() => OnCardClicked());
+        cardButtons.Add(button);
+        cardButtonsArray.Add(buttonObj);
+    }
+
+    private void DestroyCardButton()
+    {
+        cardButtons.Clear();
+        foreach (var cardButton in cardButtonsArray)
+        {
+            Destroy(cardButton);
+        }
     }
 
 
@@ -102,6 +138,7 @@ public class TurnManager : MonoBehaviour
         timer -= Time.deltaTime;
         uiFill.fillAmount = timer / CountTime;
         uiTimerText.text = timer.ToString("F2");
+        uiSelectedCardText.text = SelectedCard;
 
         if (timer <= 0)
         {
@@ -114,9 +151,75 @@ public class TurnManager : MonoBehaviour
     {
         // アクションフェーズのロジック
         // ...
+        DestroyCardButton();
+        if(!hasPlayerExecuted)
+        {
+            switch (SelectedCard)
+            {
+                case "Fire":
+                    Player.Instance.Fire(Enemy.Instance);
+                    break;
+                case "Dodge":
+                    Player.Instance.Dodge();
+                    break;
+                case "Change":
+                    Player.Instance.Change(); 
+                    break;
+                case "Skill":
+                    Player.Instance.Skill(); 
+                    break;
+            }
+            hasPlayerExecuted = true;
+        }
+
+        if(!hasEnemyExecuted)
+        {
+            int enemyCard = Random.Range(0, 4);
+            switch (enemyCard)
+            {
+                case 0:
+                    EnemyCard = "Fire";
+                    Enemy.Instance.Fire(Player.Instance);
+                    break;
+                case 1:
+                    EnemyCard = "Dodge";
+                    Enemy.Instance.Dodge();
+                    break;
+                case 2:
+                    EnemyCard = "Change";
+                    Enemy.Instance.Change();
+                    break;
+                case 3:
+                    EnemyCard = "Skill";
+                    Enemy.Instance.Skill();
+                    break;
+            }
+            hasEnemyExecuted = true;
+        }
+
+        if (hasPlayerExecuted && hasEnemyExecuted && !isJudge)
+        {
+            var player = Player.Instance;
+            var enemy = Enemy.Instance;
+
+            Debug.Log($"Player:{player.State} Enemy:{enemy.State}");
+            Debug.Log($"Player:{player.IsBulletExist} Enemy:{enemy.IsBulletExist}");
+            DamageProcesser(player,enemy);
+            isJudge = true;
+        }
+
+        uiEnemySelectedCardText.text = EnemyCard;
         uiStatusText.text = "Action Phase";
         if(Input.GetKeyDown(KeyCode.Space))
             SetPhase(Phase.Processing); // 次のフェーズへ
+    }
+
+    private void DamageProcesser(Character from,Character target)
+    {
+        if (from.IsBulletExist && target.State != Character.CharacterState.Dodge)
+        {
+            target.TakeDamage();
+        }
     }
 
     private void HandleProcessingPhase()
@@ -127,7 +230,14 @@ public class TurnManager : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            CreateCardButton();
+            CreateCardButton(fireButton);
+            CreateCardButton(dodgeButton);
+            CreateCardButton(changeButton);
+            CreateCardButton(skillButton);
+
+            hasEnemyExecuted = false;
+            hasPlayerExecuted = false;
+            isJudge = false;
             SetPhase(Phase.Selection); // 次のフェーズへ
         }
     }
